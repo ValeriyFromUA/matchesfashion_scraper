@@ -1,5 +1,6 @@
 import csv
 import json
+import time
 from typing import List
 
 import requests
@@ -22,3 +23,12 @@ def data_to_csv(data_list: [List], filename: str = 'shoes.csv'):
         csv_writer.writeheader()
         csv_writer.writerows(data_list)
     logger.info(f"{Fore.GREEN} data saved as {filename} {Style.BRIGHT}")
+
+
+def scroller(driver):
+    for i in range(120):
+        driver.execute_script("window.scrollBy(0, -700);")
+        time.sleep(0.1)
+    for i in range(120):
+        driver.execute_script("window.scrollBy(0, 700);")
+        time.sleep(0.1)

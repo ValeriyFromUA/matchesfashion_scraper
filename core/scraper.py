@@ -10,9 +10,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 
-from core.config import BASE_URLS, CARDS_ON_PAGE
+from core.config import BASE_URLS, CARDS_ON_PAGE, DISTRACTING_URLS
 from core.logger import get_logger
-from core.utils import data_to_csv, data_to_json
+from core.utils import data_to_csv, data_to_json, scroller
 from driver.chromedriver import get_driver
 
 user_agent = UserAgent()
@@ -27,10 +27,12 @@ def wait_for_page_to_load():
 
 def get_categories() -> List[Dict]:
     category_urls = []
+    for _ in range(4):
+        driver.get(random.choice(DISTRACTING_URLS))
+        time.sleep(random.uniform(2, 6))
     for url in BASE_URLS:
         time.sleep(random.uniform(2, 6))
         driver.get(url)
-        driver.refresh()
         time.sleep(random.uniform(2, 6))
         soup = BeautifulSoup(driver.page_source, 'lxml')
         categories = soup.find_all('a', class_='css-1n47t96')
@@ -51,6 +53,7 @@ def get_page_count(page_source: str):
 
 def get_category_data(category_url: str, product_category: str):
     try:
+        driver.get(random.choice(DISTRACTING_URLS))
         card_data = []
         driver.get(category_url)
         page_count = get_page_count(driver.page_source)
@@ -60,10 +63,12 @@ def get_category_data(category_url: str, product_category: str):
             driver.execute_script("window.scrollBy(0, 300);")
             WebDriverWait(driver, 20).until(ec.element_to_be_clickable((By.CLASS_NAME, "css-15ylk4w"))).click()
             driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.END)
-            driver.execute_script("window.scrollBy(0, -700);")
+
             wait_for_page_to_load()
             logger.info(
                 f"{Fore.GREEN} Scrolling through page no.{_ + 1}/{page_count} {product_category} {Style.BRIGHT}")
+
+        scroller(driver)
         time.sleep(random.uniform(2, 6))
         soup = BeautifulSoup(driver.page_source, 'lxml')
         cards = soup.find_all('div', class_='css-1kxonj9')
@@ -71,12 +76,14 @@ def get_category_data(category_url: str, product_category: str):
             data = {
                 'title': card.find('p', class_='chakra-text css-13hd2r4').text,
                 'url': f"https://www.matchesfashion.com{card.find('a', class_='chakra-link css-nnzi91')['href']}",
-                'price': card.find('span', class_='chakra-text css-1cf9vlj').text.replace('£', ''),
+                'price £': card.find(
+                    'span', class_='chakra-text css-1cf9vlj').text.replace('£', '').replace(",", "").replace(" ", ""),
                 'price_drop': None,
-                'image_url': card.find('img', class_='css-s08p0c')['src'].replace('//', '') if card.find('img',
-                                                                                                         class_='css-s08p0c') else None,
+                'image_url': card.find(
+                    'img', class_='css-s08p0c')['src'].replace('//', '') if card.find('img',
+                                                                                      class_='css-s08p0c') else None,
                 'category': product_category,
-                'gender': 'women' if '/womens/' in category_url else 'man',
+                'gender': 'Women' if '/womens/' in category_url else 'Man',
 
             }
             card_data.append(data)
@@ -87,19 +94,29 @@ def get_category_data(category_url: str, product_category: str):
 
 
 def get_all_product():
+    unique_list = []
     logger.info(f"{Fore.GREEN} *** Start of data collection ***{Style.BRIGHT}")
     data = []
     categories = get_categories()
-    for category in categories:
-        time.sleep(random.uniform(10, 20))
-        for product_category, category_url in category.items():
-            try:
-                data.extend(get_category_data(category_url=category_url, product_category=product_category))
-            except Exception as e:
-                logger.info(f"{Fore.YELLOW}  {e} {Style.BRIGHT}")
-                continue
-
-    data_to_csv(data)
-    data_to_json(data)
+    for _ in range(3):
+        for category in categories:
+            time.sleep(random.uniform(10, 20))
+            for product_category, category_url in category.items():
+                try:
+                    data.extend(get_category_data(category_url=category_url, product_category=product_category))
+                except Exception as e:
+                    logger.info(f"{Fore.YELLOW}  {e} {Style.BRIGHT}")
+                    continue
+    for item in data:
+        if item["image_url"] is not None:
+            found_duplicate = False
+            for unique_item in unique_list:
+                if item["url"] == unique_item["url"]:
+                    found_duplicate = True
+                    break
+            if not found_duplicate:
+                unique_list.append(item)
+    data_to_csv(unique_list)
+    data_to_json(unique_list)
     logger.info(f"{Fore.GREEN} *** All data collected *** {Style.BRIGHT}")
     return data
